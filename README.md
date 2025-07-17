@@ -4,8 +4,9 @@ A standalone deployment package for embedding multi-pass air filtration simulati
 
 ## What This Is
 
-This is a self-contained web application that shows how different air filters perform in recirculating room air over time. It simulates:
+This is a clean, self-contained web application that shows how different air filters perform in recirculating room air over time. It features:
 
+- **Clean interface**: Only shows the global clock and filter simulations (no headers or navigation)
 - **7 Filter Types**: HEPA, MERV15, MERV13, MERV10, ViSTAT-10, MERV7, ViSTAT-7
 - **Real-time simulation**: Particles bouncing around a room and being gradually filtered
 - **Synchronized timing**: All filters run on the same accelerated timeline

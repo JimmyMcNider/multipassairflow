@@ -144,47 +144,6 @@ export default function MultiPassPage() {
   return (
     <div style={{ padding: '20px', backgroundColor: COLORS.BACKGROUND_WHITE }}>
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        <h2 style={{ margin: '0 0 10px 0', color: '#333' }}>
-          Multi-Pass Filter Simulations
-        </h2>
-        <p style={{ 
-          margin: '0 0 20px 0', 
-          color: '#666',
-          fontSize: '14px'
-        }}>
-          Recirculating room simulation showing gradual pathogen removal over multiple air changes. Watch efficiency build up over time.
-        </p>
-
-        {/* Filter Controls - Hidden for now */}
-        <div style={{ display: 'none' }}>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#333' }}>
-            Select Filters to Compare:
-          </h4>
-          <div style={{ 
-            display: 'flex', 
-            gap: '15px', 
-            flexWrap: 'wrap' 
-          }}>
-            {availableFilters.map(filterKey => (
-              <label key={filterKey} style={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={selectedFilters.includes(filterKey)}
-                  onChange={() => handleFilterToggle(filterKey)}
-                  style={{ marginRight: '8px' }}
-                />
-                {filterKey} 
-                {/* ({scenarioPasses[filterKey]} passes for 100%) */}
-              </label>
-            ))}
-          </div>
-        </div>
-
         {/* Global Clock */}
         <GlobalClock />
         
@@ -199,20 +158,6 @@ export default function MultiPassPage() {
             marginTop: '10px'
           }}
         ></div>
-
-        {/* Info Section */}
-        <div style={{
-          marginTop: '20px',
-          padding: '15px',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '8px',
-          fontSize: '13px',
-          color: '#666'
-        }}>
-          <strong>Multi-Pass Mode:</strong> Room air recirculates through the HVAC system multiple times. 
-          Particles bounce around the room and are gradually removed when they encounter the filter. 
-          The gray square represents the HVAC intake where filtration occurs.
-        </div>
       </div>
     </div>
   );
