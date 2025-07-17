@@ -4,5 +4,7 @@ import MultiPassPage from './pages/MultiPassPage.jsx';
 import './App.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-    <MultiPassPage />
+    <React.StrictMode>
+        <MultiPassPage />
+    </React.StrictMode>
 );
