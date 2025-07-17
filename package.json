@@ -1,0 +1,22 @@
+{
+  "name": "multipass-simulation",
+  "version": "1.0.0",
+  "description": "Multi-pass air filtration simulation for WordPress integration",
+  "main": "index.html",
+  "scripts": {
+    "deploy": "echo 'Deploy to GitHub Pages using GitHub Actions'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_ORG/multipass-simulation.git"
+  },
+  "keywords": [
+    "air-filtration",
+    "simulation",
+    "CFD",
+    "multipass",
+    "HVAC"
+  ],
+  "author": "BioActive Technology",
+  "license": "MIT"
+}
