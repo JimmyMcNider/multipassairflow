@@ -5,14 +5,22 @@ import { COLORS } from '../utils/colors.js';
 // Global Clock Component
 function GlobalClock() {
   const [currentTime, setCurrentTime] = useState(0);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
       const simulatedMinutes = GlobalTimeSystem.getCurrentSimulatedMinutes();
       setCurrentTime(simulatedMinutes);
+      setIsRestarting(GlobalTimeSystem.isRestarting);
+      
+      // Trigger auto-loop check by calling getProgress()
+      GlobalTimeSystem.getProgress();
     }, 100); // Update every 100ms for smooth time display
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      console.log('GlobalClock: Cleaned up interval');
+    };
   }, []);
 
   const hours = Math.floor(currentTime / 60);
@@ -23,27 +31,27 @@ function GlobalClock() {
     <div style={{
       textAlign: 'center',
       padding: '20px',
-      backgroundColor: '#f8f9fa',
+      backgroundColor: isRestarting ? '#e8f5e8' : '#f8f9fa',
       borderRadius: '12px',
-      border: '3px solid #007acc',
+      border: `3px solid ${isRestarting ? '#28a745' : '#007acc'}`,
       marginBottom: '20px',
       boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
     }}>
       <div style={{
         fontSize: '28px',
         fontWeight: 'bold',
-        color: '#007acc',
+        color: isRestarting ? '#28a745' : '#007acc',
         marginBottom: '8px',
         letterSpacing: '1px'
       }}>
-        {timeDisplay}
+        {isRestarting ? 'Restarting Animation...' : timeDisplay}
       </div>
       <div style={{
         fontSize: '16px',
         color: '#666',
         fontWeight: '500'
       }}>
-        Accelerated Simulation Time • 6 Air Exchanges/Hour
+        {isRestarting ? 'All filters completed • Restarting in 2 seconds' : 'Accelerated Simulation Time • 6 Air Exchanges/Hour'}
       </div>
     </div>
   );
@@ -138,6 +146,15 @@ export default function MultiPassPage() {
       });
       simulationsRef.current = [];
       animationRunningRef.current = false;
+      
+      // Clear GlobalTimeSystem callbacks and timers on cleanup
+      GlobalTimeSystem.clearResetCallbacks();
+      if (GlobalTimeSystem.restartTimer) {
+        clearTimeout(GlobalTimeSystem.restartTimer);
+        GlobalTimeSystem.restartTimer = null;
+      }
+      GlobalTimeSystem.isRestarting = false;
+      console.log('MultiPassPage: Cleaned up GlobalTimeSystem');
     };
   }, [selectedFilters]);
 

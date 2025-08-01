@@ -1,11 +1,18 @@
 // public/simulations.js  (or src/simulations.js in your Vite app)
 
+console.log('✅ Auto-loop enabled - simulations will restart after completion');
+
 // Global time system for multipass simulations
 export const GlobalTimeSystem = {
   airExchangesPerHour: 6,
-  totalSimulationTime: 3 * 60 * 1000, // 3 minutes in milliseconds
+  totalSimulationTime: 30 * 1000, // 30 seconds for testing auto-loop
   simulationStartTime: null,
   maxTimeToComplete: 0, // Will be set to the longest filter time
+  autoLoop: true, // Enable automatic looping
+  restartDelay: 2000, // 2 second pause at 100% before restart
+  restartTimer: null, // Timer for restart delay
+  isRestarting: false, // Flag to track restart state
+  resetCallbacks: [], // Array to store simulation reset functions
   
   init() {
     this.simulationStartTime = Date.now();
@@ -15,17 +22,63 @@ export const GlobalTimeSystem = {
     if (!this.simulationStartTime) return 0;
     const realElapsedMs = Date.now() - this.simulationStartTime;
     const progress = Math.min(realElapsedMs / this.totalSimulationTime, 1);
+    
+    // During restart delay, return the maximum time to maintain 100% state
+    if (this.isRestarting) {
+      return this.maxTimeToComplete;
+    }
+    
     return progress * this.maxTimeToComplete;
   },
   
   getProgress() {
     if (!this.simulationStartTime) return 0;
     const realElapsedMs = Date.now() - this.simulationStartTime;
-    return Math.min(realElapsedMs / this.totalSimulationTime, 1);
+    const progress = Math.min(realElapsedMs / this.totalSimulationTime, 1);
+    
+    // Auto-loop logic: restart after reaching 100% completion
+    if (this.autoLoop && progress >= 1 && !this.isRestarting) {
+      console.log('🔄 Auto-loop triggered! Progress:', progress);
+      this.isRestarting = true;
+      this.restartTimer = setTimeout(() => {
+        console.log('🔄 Restarting animation now!');
+        this.reset();
+        this.isRestarting = false;
+        this.restartTimer = null;
+      }, this.restartDelay);
+    }
+    
+    return progress;
   },
   
   reset() {
+    // Clear any existing restart timer
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    
     this.simulationStartTime = Date.now();
+    this.isRestarting = false;
+    
+    // Call all registered reset callbacks to reset individual simulations
+    this.resetCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.warn('Error calling reset callback:', error);
+      }
+    });
+    
+    console.log('GlobalTimeSystem: Animation restarting with', this.resetCallbacks.length, 'simulations');
+  },
+  
+  registerResetCallback(callback) {
+    this.resetCallbacks.push(callback);
+  },
+  
+  clearResetCallbacks() {
+    this.resetCallbacks = [];
   }
 };
 
@@ -39,7 +92,7 @@ export class Simulation {
     this.maxParticles = 500;
     this.spawnInterval = 41;
     this.lastSpawn = 0;
-    this.baseSpeed = 0.2;
+    this.baseSpeed = 0.1; // Reduced from 0.2 to slow down particles
     this.hvacSize = 20;
     this.filled = false;
     
@@ -74,12 +127,27 @@ export class Simulation {
     this.ctx = this.canvas.getContext('2d');
     window.addEventListener('resize', () => this.resize());
     this.resize();
+    
+    // Register reset callback with GlobalTimeSystem
+    this.resetCallback = () => this.resetState();
+    GlobalTimeSystem.registerResetCallback(this.resetCallback);
   }
 
   resize() {
     this.canvas.width = this.container.clientWidth;
     const headerH = this.title.clientHeight + (this.info ? this.info.clientHeight : 0) + 10;
     this.canvas.height = this.container.clientHeight - headerH;
+  }
+  
+  resetState() {
+    // Reset multi-pass simulation state
+    if (this.scenario === 'multi') {
+      this.isComplete = false;
+      this.completionTime = null;
+      this.filled = false;
+      this.particles = [];
+      console.log(`${this.filterKey}: Simulation state reset`);
+    }
   }
 
   fillRoom() {
@@ -241,8 +309,11 @@ export class Simulation {
       // Update particle movement
       for (let i = this.particles.length - 1; i >= 0; i--) {
         const p = this.particles[i];
-        p.x += p.vx * delta;
-        p.y += p.vy * delta;
+        
+        // Red particles (pathogens) move 10% faster than blue particles (air)
+        const speedMultiplier = p.type === 'pathogen' ? 1.1 : 1.0;
+        p.x += p.vx * delta * speedMultiplier;
+        p.y += p.vy * delta * speedMultiplier;
 
         // Bounce off walls
         if (p.x <= 0 || p.x >= this.canvas.width) p.vx *= -1;
