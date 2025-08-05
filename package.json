@@ -1,6 +1,6 @@
 {
   "name": "multipass-simulation",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-pass air filtration simulation for WordPress integration",
   "main": "index.html",
   "scripts": {

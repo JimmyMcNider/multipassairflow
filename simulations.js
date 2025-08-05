@@ -3,6 +3,7 @@
 console.log('✅ Auto-loop enabled - simulations will restart after completion');
 console.log('🔥 MULTIPASS-DEPLOY SIMULATIONS.JS LOADED - 180 seconds!');
 console.log('🔥 File path: /Users/james/projects/airflowvis/multipass-deploy/simulations.js');
+console.log('🚀 NEW BUILD WITH SPACING CHANGES - VERSION 2024-08-05');
 
 // Global time system for multipass simulations
 export const GlobalTimeSystem = {
