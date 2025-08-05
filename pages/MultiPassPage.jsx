@@ -124,17 +124,27 @@ export default function MultiPassPage() {
     if (simulationsRef.current.length > 0 && !animationRunningRef.current) {
       animationRunningRef.current = true;
       let lastTime = performance.now();
-      const animate = (time) => {
-        const delta = time - lastTime;
-        lastTime = time;
-        simulationsRef.current.forEach(sim => sim.update(delta, time));
+      const animate = () => {
+        const currentTime = performance.now();
+        // Cap delta to prevent huge jumps when returning from hidden tab (max ~30fps = 33ms)
+        const delta = Math.min(currentTime - lastTime, 33);
+        lastTime = currentTime;
+        
         if (simulationsRef.current.length > 0) {
-          requestAnimationFrame(animate);
+          simulationsRef.current.forEach(sim => sim.update(delta, currentTime));
         } else {
-          animationRunningRef.current = false;
+          // Stop animation if no simulations
+          if (animationRunningRef.current && typeof animationRunningRef.current === 'number') {
+            clearInterval(animationRunningRef.current);
+            animationRunningRef.current = false;
+          }
         }
       };
-      requestAnimationFrame(animate);
+      // Use setInterval instead of requestAnimationFrame for tab-independent animation
+      const intervalId = setInterval(animate, 16); // ~60fps
+      
+      // Store interval ID for cleanup
+      animationRunningRef.current = intervalId;
     }
 
     // Cleanup function
@@ -145,6 +155,11 @@ export default function MultiPassPage() {
         }
       });
       simulationsRef.current = [];
+      
+      // Clear the animation interval if it's running
+      if (animationRunningRef.current && typeof animationRunningRef.current === 'number') {
+        clearInterval(animationRunningRef.current);
+      }
       animationRunningRef.current = false;
       
       // Clear GlobalTimeSystem callbacks and timers on cleanup
@@ -154,7 +169,7 @@ export default function MultiPassPage() {
         GlobalTimeSystem.restartTimer = null;
       }
       GlobalTimeSystem.isRestarting = false;
-      console.log('MultiPassPage: Cleaned up GlobalTimeSystem');
+      console.log('MultiPassPage: Cleaned up GlobalTimeSystem and animation interval');
     };
   }, [selectedFilters]);
 

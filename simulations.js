@@ -1,11 +1,13 @@
 // public/simulations.js  (or src/simulations.js in your Vite app)
 
 console.log('✅ Auto-loop enabled - simulations will restart after completion');
+console.log('🔥 MULTIPASS-DEPLOY SIMULATIONS.JS LOADED - 180 seconds!');
+console.log('🔥 File path: /Users/james/projects/airflowvis/multipass-deploy/simulations.js');
 
 // Global time system for multipass simulations
 export const GlobalTimeSystem = {
   airExchangesPerHour: 6,
-  totalSimulationTime: 30 * 1000, // 30 seconds for testing auto-loop
+  totalSimulationTime: 180 * 1000, // 30 seconds for testing auto-loop
   simulationStartTime: null,
   maxTimeToComplete: 0, // Will be set to the longest filter time
   autoLoop: true, // Enable automatic looping
@@ -222,7 +224,12 @@ export class Simulation {
     const dtSec = delta / 1000;
     const ctx = this.ctx;
 
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Defensive check: Skip rendering if canvas is hidden/collapsed but keep particle logic running
+    const canRender = ctx && this.canvas.width > 0 && this.canvas.height > 0;
+    
+    if (canRender) {
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
 
     // Multi-pass initial fill
     if (this.scenario === 'multi' && !this.filled) {
@@ -233,15 +240,13 @@ export class Simulation {
     if (this.scenario === 'single') {
       // Single-pass: stream through center line
       const filterX = this.canvas.width / 2;
-      ctx.fillStyle = '#888';
-      ctx.fillRect(filterX - 2, 0, 4, this.canvas.height);
-
+      
       if (time - this.lastSpawn > this.spawnInterval) {
         this.spawn();
         this.lastSpawn = time;
       }
 
-      // Move & draw particles
+      // Move particles (always update, regardless of canvas visibility)
       for (let i = this.particles.length - 1; i >= 0; i--) {
         const p = this.particles[i];
         // Calculate visual speed based on CFM range (500-819)
@@ -260,23 +265,38 @@ export class Simulation {
           p.color = this.filterKey.startsWith('ViSTAT') ? 'gray' : 'red';
         }
 
-        if (p.x > this.canvas.width + 5) {
+        // Use canvas width from last known good state if canvas is collapsed
+        const effectiveCanvasWidth = canRender ? this.canvas.width : (this.lastKnownWidth || 400);
+        if (p.x > effectiveCanvasWidth + 5) {
           this.particles.splice(i, 1);
           continue;
         }
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.type === 'air' ? 2 : 3, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.fill();
       }
 
-      // Metrics
-      ctx.fillStyle = '#000';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(`CFM In: ${cfmIn}`, 10, 15);
-      ctx.fillText(`CFM Out: ${cfmOut.toFixed(1)}`, 10, 30);
-      ctx.fillText(`Viral Filtration Efficiency: ${removal}%`, 10, 45);
+      // Only draw if canvas is visible and valid
+      if (canRender) {
+        // Store last known width for particle logic
+        this.lastKnownWidth = this.canvas.width;
+        
+        // Draw filter line
+        ctx.fillStyle = '#888';
+        ctx.fillRect(filterX - 2, 0, 4, this.canvas.height);
+
+        // Draw particles
+        for (const p of this.particles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.type === 'air' ? 2 : 3, 0, 2 * Math.PI);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
+
+        // Metrics
+        ctx.fillStyle = '#000';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`CFM In: ${cfmIn}`, 10, 15);
+        ctx.fillText(`CFM Out: ${cfmOut.toFixed(1)}`, 10, 30);
+        ctx.fillText(`Viral Filtration Efficiency: ${removal}%`, 10, 45);
+      }
 
     } else {
       // Multi-pass: time-controlled recirculating room using global time
@@ -288,22 +308,28 @@ export class Simulation {
       const remainingPathogens = this.particles.filter(p => p.type === 'pathogen').length;
       const timeProgress = Math.min(globalSimulatedMinutes / this.timeToComplete, 1);
       
-      // Complete when very close to target time (within last 0.5% of timeline)
-      if (!this.isComplete && timeProgress >= 0.995 && remainingPathogens <= 2) {
+      // Complete at exactly the target time (100% of timeline)
+      if (!this.isComplete && timeProgress >= 1.0) {
         this.isComplete = true;
-        this.completionTime = globalSimulatedMinutes;
-        // Remove final particle(s)
+        this.completionTime = this.timeToComplete; // Set to exact target time
+        // Remove all pathogen particles instantly at completion
         this.particles = this.particles.filter(p => p.type !== 'pathogen');
       }
       
-      // Calculate current efficiency based on time progress (logarithmic curve)
-      const targetEfficiency = timeProgress >= 1 ? 100 : (1 - Math.exp(-5 * timeProgress)) * 100;
-      
+      // Calculate current efficiency - exact mathematical curve with 100% snap
       let currentEfficiency;
       if (this.isComplete) {
-        currentEfficiency = 100;
+        currentEfficiency = 100; // Exactly 100% when complete
       } else {
-        currentEfficiency = Math.min(targetEfficiency, 99.9);
+        // Linear interpolation to exactly 99.9% at 99.9% of timeline
+        if (timeProgress < 0.999) {
+          // Smooth curve up to 99.9% of the time
+          const curveEfficiency = (1 - Math.exp(-6 * timeProgress)) * 100;
+          currentEfficiency = Math.min(curveEfficiency, 99.9 * (timeProgress / 0.999));
+        } else {
+          // Final stretch: ensure we hit exactly 99.9%
+          currentEfficiency = 99.9;
+        }
       }
       
       // Update particle movement
@@ -315,30 +341,36 @@ export class Simulation {
         p.x += p.vx * delta * speedMultiplier;
         p.y += p.vy * delta * speedMultiplier;
 
-        // Bounce off walls
-        if (p.x <= 0 || p.x >= this.canvas.width) p.vx *= -1;
-        if (p.y <= 0 || p.y >= this.canvas.height) p.vy *= -1;
+        // Bounce off walls (use last known dimensions if canvas is collapsed)
+        const effectiveWidth = canRender ? this.canvas.width : (this.lastKnownWidth || 400);
+        const effectiveHeight = canRender ? this.canvas.height : (this.lastKnownHeight || 300);
+        
+        if (p.x <= 0 || p.x >= effectiveWidth) p.vx *= -1;
+        if (p.y <= 0 || p.y >= effectiveHeight) p.vy *= -1;
 
-        // Remove particles to match logarithmic filtration curve
-        if (p.type === 'pathogen') {
+        // Deterministic particle removal to match exact efficiency curve (only if not complete)
+        if (p.type === 'pathogen' && !this.isComplete) {
           const timeProgress = Math.min(globalSimulatedMinutes / this.timeToComplete, 1);
           
-          // Exponential decay curve that reaches 100% at exactly the target time
-          const targetEfficiency = 1 - Math.exp(-5 * timeProgress);
+          // Target efficiency based on mathematical curve (matches display curve)
+          let targetEfficiency;
+          if (timeProgress < 0.999) {
+            const curveEfficiency = (1 - Math.exp(-6 * timeProgress));
+            targetEfficiency = Math.min(curveEfficiency, 0.999 * (timeProgress / 0.999));
+          } else {
+            targetEfficiency = 0.999; // 99.9% in decimal form
+          }
           
-          // Current actual particle-based efficiency
+          // Calculate target number of pathogens that should remain
+          const targetPathogens = Math.round(this.initialPathogenCount * (1 - targetEfficiency));
           const currentPathogens = this.particles.filter(p => p.type === 'pathogen').length;
-          const currentEfficiency = this.initialPathogenCount > 0 ? 
-            (this.initialPathogenCount - currentPathogens) / this.initialPathogenCount : 0;
           
-          // Only remove if we're behind the target curve
-          if (currentEfficiency < targetEfficiency) {
-            // Progressive removal rate - faster at start, slower as we approach target
-            const efficiencyGap = targetEfficiency - currentEfficiency;
-            const baseRemovalRate = 0.008; // Base removal rate
-            const removalRate = Math.min(0.03, baseRemovalRate + efficiencyGap * 0.05);
-            
-            if (Math.random() < removalRate) {
+          // If we have too many pathogens, remove this one deterministically
+          if (currentPathogens > targetPathogens) {
+            // Remove particles systematically (every Nth particle) rather than randomly
+            const excessPathogens = currentPathogens - targetPathogens;
+            const removalInterval = Math.max(1, Math.floor(currentPathogens / excessPathogens));
+            if (i % removalInterval === 0) {
               this.particles.splice(i, 1);
               continue;
             }
@@ -346,65 +378,75 @@ export class Simulation {
         }
       }
 
-      // Draw boundary and HVAC
-      ctx.strokeStyle = '#888';
-      ctx.strokeRect(0, 0, this.canvas.width, this.canvas.height);
+      // Only draw if canvas is visible and valid
+      if (canRender) {
+        // Store last known dimensions for particle logic
+        this.lastKnownWidth = this.canvas.width;
+        this.lastKnownHeight = this.canvas.height;
+        
+        // Draw boundary and HVAC
+        ctx.strokeStyle = '#888';
+        ctx.strokeRect(0, 0, this.canvas.width, this.canvas.height);
 
-      // Color HVAC and overlay based on completion status
-      if (this.isComplete) {
-        // Draw green overlay on entire simulation
-        ctx.fillStyle = 'rgba(40, 167, 69, 0.15)';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.fillStyle = '#28a745'; // Green HVAC when complete
-      } else {
-        ctx.fillStyle = '#666';
-      }
-      
-      ctx.fillRect(
-        this.canvas.width - this.hvacSize,
-        this.canvas.height / 2 - this.hvacSize / 2,
-        this.hvacSize,
-        this.hvacSize
-      );
+        // Color HVAC and overlay based on completion status
+        if (this.isComplete) {
+          // Draw green overlay on entire simulation
+          ctx.fillStyle = 'rgba(40, 167, 69, 0.15)';
+          ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+          ctx.fillStyle = '#28a745'; // Green HVAC when complete
+        } else {
+          ctx.fillStyle = '#666';
+        }
+        
+        ctx.fillRect(
+          this.canvas.width - this.hvacSize,
+          this.canvas.height / 2 - this.hvacSize / 2,
+          this.hvacSize,
+          this.hvacSize
+        );
 
-      // Draw particles
-      for (const p of this.particles) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.type === 'air' ? 2 : 4, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.fill();
+        // Draw particles
+        for (const p of this.particles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.type === 'air' ? 2 : 4, 0, 2 * Math.PI);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
       }
 
       // Don't draw individual clocks - will be handled globally
       
-      // Progress bar for this specific filter - smooth time-based progress
-      const progressBarWidth = this.canvas.width - 40;
-      const progressBarHeight = 6;
-      const progressBarX = 20;
-      const progressBarY = 25;
-      
-      ctx.fillStyle = '#ddd';
-      ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
-      
-      // Smooth progress based on time, not particle count
-      const filterProgress = timeProgress; // 0 to 1 based on time
-      
-      ctx.fillStyle = this.isComplete ? '#28a745' : '#007acc';
-      ctx.fillRect(progressBarX, progressBarY, progressBarWidth * filterProgress, progressBarHeight);
+      // Only draw UI elements if canvas is visible and valid
+      if (canRender) {
+        // Progress bar for this specific filter - smooth time-based progress
+        const progressBarWidth = this.canvas.width - 40;
+        const progressBarHeight = 6;
+        const progressBarX = 20;
+        const progressBarY = 25;
+        
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
+        
+        // Smooth progress based on time, not particle count
+        const filterProgress = timeProgress; // 0 to 1 based on time
+        
+        ctx.fillStyle = this.isComplete ? '#28a745' : '#007acc';
+        ctx.fillRect(progressBarX, progressBarY, progressBarWidth * filterProgress, progressBarHeight);
 
-      // Metrics
-      const displayedEfficiency = Math.min(currentEfficiency, 100);
+        // Metrics
+        const displayedEfficiency = Math.min(currentEfficiency, 100);
 
-      ctx.fillStyle = this.isComplete ? '#28a745' : '#000';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(`Target: ${this.timeToComplete} min (${this.passes} passes)`, 10, this.canvas.height - 30);
-      ctx.fillText(`Current Efficiency: ${displayedEfficiency.toFixed(1)}%`, 10, this.canvas.height - 15);
-      
-      if (this.isComplete) {
-        ctx.fillStyle = '#28a745';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('✓ 100% COMPLETE', 10, this.canvas.height - 45);
+        ctx.fillStyle = this.isComplete ? '#28a745' : '#000';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Target: ${this.timeToComplete} min (${this.passes} passes)`, 10, this.canvas.height - 30);
+        ctx.fillText(`Current Efficiency: ${displayedEfficiency.toFixed(1)}%`, 10, this.canvas.height - 15);
+        
+        if (this.isComplete) {
+          ctx.fillStyle = '#28a745';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText('✓ 100% COMPLETE', 10, this.canvas.height - 45);
+        }
       }
     }
   }
