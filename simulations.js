@@ -113,7 +113,22 @@ export class Simulation {
     this.container.className = 'sim-box';
 
     this.title = document.createElement('h3');
-    this.title.textContent = `${filterKey} (${scenario === 'single' ? 'Single-Pass' : 'Multi-Pass'})`;
+    // Clean up filter names and remove Multi-Pass suffix
+    let displayName = filterKey;
+    if (filterKey === 'ViSTAT-10') {
+      displayName = 'ViSTAT MERV 10';
+    } else if (filterKey === 'ViSTAT-7') {
+      displayName = 'ViSTAT MERV 7';
+    } else if (filterKey === 'MERV15') {
+      displayName = 'MERV 15';
+    } else if (filterKey === 'MERV13') {
+      displayName = 'MERV 13';
+    } else if (filterKey === 'MERV10') {
+      displayName = 'MERV 10';
+    } else if (filterKey === 'MERV7') {
+      displayName = 'MERV 7';
+    }
+    this.title.textContent = displayName;
     this.container.appendChild(this.title);
 
     if (scenario === 'multi') {

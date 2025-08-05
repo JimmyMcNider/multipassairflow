@@ -58,8 +58,11 @@ function GlobalClock() {
 }
 
 export default function MultiPassPage() {
-  // Hide HEPA for now
-  const availableFilters = Object.keys(filterParams).filter(key => key !== 'HEPA');
+  // Define custom filter order: MERV15, ViSTAT-10, ViSTAT-7, MERV13, MERV10, MERV7
+  const availableFilters = ['MERV15', 'ViSTAT-10', 'ViSTAT-7', 'MERV13', 'MERV10', 'MERV7'];
+  
+  // Force new build to bypass cache
+  console.log('Filter order:', availableFilters);
   
   const [selectedFilters, setSelectedFilters] = useState(availableFilters);
   const containerRef = useRef(null);
@@ -78,22 +81,13 @@ export default function MultiPassPage() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Find which filters were added/removed
-    const currentKeys = simulationsRef.current.map(sim => sim.filterKey);
-    const filtersToAdd = selectedFilters.filter(key => !currentKeys.includes(key));
-    const filtersToRemove = currentKeys.filter(key => !selectedFilters.includes(key));
-
-    // Remove simulations that are no longer selected
-    filtersToRemove.forEach(filterKey => {
-      const simIndex = simulationsRef.current.findIndex(sim => sim.filterKey === filterKey);
-      if (simIndex !== -1) {
-        const sim = simulationsRef.current[simIndex];
-        if (sim.container && sim.container.parentNode) {
-          sim.container.parentNode.removeChild(sim.container);
-        }
-        simulationsRef.current.splice(simIndex, 1);
+    // Clear all existing simulations to ensure proper ordering
+    simulationsRef.current.forEach(sim => {
+      if (sim.container && sim.container.parentNode) {
+        sim.container.parentNode.removeChild(sim.container);
       }
     });
+    simulationsRef.current = [];
 
     // Always reset global time system when simulations change
     // Calculate the maximum time needed across all selected filters
@@ -103,8 +97,8 @@ export default function MultiPassPage() {
     // Always reset the global timer to ensure fresh start
     GlobalTimeSystem.reset();
 
-    // Add new simulations for newly selected filters
-    filtersToAdd.forEach(filterKey => {
+    // Create all simulations in the correct order
+    selectedFilters.forEach(filterKey => {
       const sim = new Simulation(
         containerRef.current, 
         filterKey, 
